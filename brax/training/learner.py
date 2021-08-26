@@ -86,6 +86,9 @@ flags.DEFINE_float('grad_updates_per_step', 1.0,
 
 
 def main(unused_argv):
+  # Parse args if given
+  flags.FLAGS(unused_argv)
+  FLAGS = flags.FLAGS
 
   env_fn = envs.create_fn(FLAGS.env)
   writer = metric_writers.create_default_writer(FLAGS.logdir)
