@@ -72,6 +72,9 @@ flags.DEFINE_integer('fitness_shaping', 0,
                      'numbers mean.')
 flags.DEFINE_bool('center_fitness', False,
                   'Whether to normalize fitness after the shaping.')
+flags.DEFINE_bool('save_html', True,
+                  'Whether to save an HTML visualizing the moment of the '
+                  'learned policy.')
 flags.DEFINE_integer('fitness_episode_length', 1000,
                      'Episode length to be used for fitness computation.')
 flags.DEFINE_float('l2coeff', 0,
@@ -186,8 +189,9 @@ def main(unused_argv):
     state = dataclasses.replace(state, rng=key)
     state = jit_step_fn(state, act)
 
-  html_path = f'{FLAGS.logdir}/trajectory_{uuid.uuid4()}.html'
-  html.save_html(html_path, env.sys, qps)
+  if FLAGS.save_html:
+    html_path = f'{FLAGS.logdir}/trajectory_{uuid.uuid4()}.html'
+    html.save_html(html_path, env.sys, qps)
 
 
 
