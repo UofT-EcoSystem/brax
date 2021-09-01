@@ -199,6 +199,8 @@ def train(
   assert batch_size * num_minibatches % num_envs == 0
   xt = time.time()
 
+
+  print('1-a')
   process_count = jax.process_count()
   process_id = jax.process_index()
   local_device_count = jax.local_device_count()
@@ -395,15 +397,19 @@ def train(
   state = first_state
   metrics = {}
 
+
   for it in range(log_frequency + 1):
+    print('1-ITERATION')
     logging.info('starting iteration %s %s', it, time.time() - xt)
     t = time.time()
 
     if process_id == 0:
+      print('1-eval')
       eval_state, key_debug = (
           run_eval(eval_first_state, key_debug,
                    training_state.optimizer.target['policy'],
                    training_state.normalizer_params))
+      print('1-d')
       eval_state.total_episodes.block_until_ready()
       eval_walltime += time.time() - t
       eval_sps = (episode_length * eval_first_state.core.reward.shape[0] /
@@ -425,14 +431,17 @@ def train(
                                                          0))}))
       logging.info(metrics)
       if progress_fn:
+        print('1-progress')
         progress_fn(int(training_state.normalizer_params[0][0]) * action_repeat,
                     metrics)
+      print('1-f')
 
     if it == log_frequency:
       break
 
     t = time.time()
     previous_step = training_state.normalizer_params[0][0]
+    print('1-optim')
     # optimization
     (training_state, state), losses = minimize_loop(training_state, state)
     jax.tree_map(lambda x: x.block_until_ready(), losses)
@@ -448,6 +457,7 @@ def train(
 
   logging.info('total steps: %s', normalizer_params[0] * action_repeat)
 
+  print('1-g')
   _, inference = make_params_and_inference_fn(core_env.observation_size,
                                               core_env.action_size,
                                               normalize_observations)
@@ -459,6 +469,7 @@ def train(
     x = jax.device_get(jax.pmap(lambda x: jax.lax.psum(x, 'i'), 'i')(x))
     assert x[0] == jax.device_count()
 
+  print('1-h')
   return (inference, params, metrics)
 
 

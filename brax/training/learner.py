@@ -179,17 +179,17 @@ def main(unused_argv):
   model.save_params(path, params)
 
   # output an episode trajectory
-  qps = []
-  jit_inference_fn = jax.jit(inference_fn)
-  jit_step_fn = jax.jit(env.step)
-  while not state.done:
+  if FLAGS.save_html:
+    qps = []
+    jit_inference_fn = jax.jit(inference_fn)
+    jit_step_fn = jax.jit(env.step)
+    # while not state.done:
     qps.append(state.qp)
     key, subkey = jax.random.split(state.rng)
     act = jit_inference_fn(params, state.obs, subkey)
     state = dataclasses.replace(state, rng=key)
     state = jit_step_fn(state, act)
 
-  if FLAGS.save_html:
     html_path = f'{FLAGS.logdir}/trajectory_{uuid.uuid4()}.html'
     html.save_html(html_path, env.sys, qps)
 
