@@ -152,7 +152,7 @@ def main(unused_argv):
           progress_fn=writer.write_scalars)
     if FLAGS.learner == 'ppo':
       print('PPO')
-      inference_fn, params, _ = ppo.setup(
+      args = ppo.setup(
           environment_fn=env_fn,
           num_envs=FLAGS.num_envs,
           max_devices_per_host=FLAGS.max_devices_per_host,
@@ -171,6 +171,7 @@ def main(unused_argv):
           reward_scaling=FLAGS.reward_scaling,
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
+      return args
 
   env = env_fn()
   state = env.reset(jax.random.PRNGKey(FLAGS.seed))
@@ -195,6 +196,8 @@ def main(unused_argv):
     html_path = f'{FLAGS.logdir}/trajectory_{uuid.uuid4()}.html'
     html.save_html(html_path, env.sys, qps)
 
+def run(args):
+    inference_fn, params, _ = ppo.learn(*args)
 
 
 if __name__ == '__main__':

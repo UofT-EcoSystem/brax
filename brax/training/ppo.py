@@ -432,7 +432,7 @@ def setup(
     )
   print('DONE REAL-COMPILE')
 
-  return learn(
+  return (
     training_state,
     sps,
     eval_sps,
@@ -454,7 +454,7 @@ def setup(
     log_frequency,
     normalize_observations,
     progress_fn,
-    )
+  )
 
 def learn(
     training_state,
@@ -473,11 +473,11 @@ def learn(
     minimize_loop,
     core_env,
     process_count,
-    episode_length: int,
-    action_repeat: int = 1,
-    log_frequency=10,
-    normalize_observations=False,
-    progress_fn: Optional[Callable[[int, Dict[str, Any]], None]] = None,
+    episode_length,
+    action_repeat,
+    log_frequency,
+    normalize_observations,
+    progress_fn,
 ):
   for it in range(log_frequency + 1):
     print('1-ITERATION')
