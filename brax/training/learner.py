@@ -90,6 +90,7 @@ flags.DEFINE_float('grad_updates_per_step', 1.0,
 
 def main(unused_argv):
   # Parse args if given
+  unused_argv.insert(0,'Flags expect first item in this list to be the name of program. Flags skips the first item. This is needed so that no args are skipped in the list.')
   flags.FLAGS(unused_argv)
   FLAGS = flags.FLAGS
 
@@ -150,7 +151,8 @@ def main(unused_argv):
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
     if FLAGS.learner == 'ppo':
-      inference_fn, params, _ = ppo.train(
+      print('PPO')
+      inference_fn, params, _ = ppo.setup(
           environment_fn=env_fn,
           num_envs=FLAGS.num_envs,
           max_devices_per_host=FLAGS.max_devices_per_host,

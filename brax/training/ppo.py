@@ -69,6 +69,7 @@ def compute_gae(truncation: jnp.ndarray,
   vs_minus_v_xs = []
 
   def compute_vs_minus_v_xs(carry, target_t):
+    print('compute_vs_minus_v_xs')
     lambda_, acc = carry
     truncation_mask, delta = target_t
     acc = delta + discount * truncation_mask * lambda_ * acc
@@ -174,7 +175,7 @@ def compute_ppo_loss(
   }
 
 
-def train(
+def setup(
     environment_fn: Callable[..., envs.Env],
     num_timesteps,
     episode_length: int,
@@ -196,11 +197,11 @@ def train(
     progress_fn: Optional[Callable[[int, Dict[str, Any]], None]] = None,
 ):
   """PPO training."""
+  print('setup')
   assert batch_size * num_minibatches % num_envs == 0
   xt = time.time()
 
 
-  print('1-a')
   process_count = jax.process_count()
   process_id = jax.process_index()
   local_device_count = jax.local_device_count()
@@ -273,6 +274,7 @@ def train(
   grad_loss = jax.grad(loss_fn, has_aux=True)
 
   def do_one_step_eval(carry, unused_target_t):
+    print('do_one_step_eval')
     state, policy_params, normalizer_params, key = carry
     key, key_sample = jax.random.split(key)
     # TODO: Make this nicer ([0] comes from pmapping).
@@ -285,6 +287,7 @@ def train(
 
   @jax.jit
   def run_eval(state, key, policy_params, normalizer_params):
+    print('run_eval')
     policy_params = jax.tree_map(lambda x: x[0], policy_params)
     (state, _, _, key), _ = jax.lax.scan(
         do_one_step_eval, (state, policy_params, normalizer_params, key), (),
@@ -292,6 +295,7 @@ def train(
     return state, key
 
   def do_one_step(carry, unused_target_t):
+    print('do_one_step')
     state, normalizer_params, policy_params, key = carry
     key, key_sample = jax.random.split(key)
     normalized_obs = obs_normalizer_apply_fn(normalizer_params, state.core.obs)
@@ -308,6 +312,7 @@ def train(
         logits=logits)
 
   def generate_unroll(carry, unused_target_t):
+    print('generate_unroll')
     state, normalizer_params, policy_params, key = carry
     (state, _, _, key), data = jax.lax.scan(
         do_one_step, (state, normalizer_params, policy_params, key), (),
@@ -322,6 +327,7 @@ def train(
     return (state, normalizer_params, policy_params, key), data
 
   def update_model(carry, data):
+    print('update_model')
     optimizer, key = carry
     key, key_loss = jax.random.split(key)
     loss_grad, metrics = grad_loss(optimizer.target, data, key_loss)
@@ -330,6 +336,7 @@ def train(
     return (optimizer, key), metrics
 
   def minimize_epoch(carry, unused_t):
+    print('minimize_epoch')
     optimizer, data, key = carry
     key, key_perm, key_grad = jax.random.split(key, 3)
     permutation = jax.random.permutation(key_perm, data.obs.shape[1])
@@ -345,6 +352,7 @@ def train(
     return (optimizer, data, key), metrics
 
   def run_epoch(carry, unused_t):
+    print('run_epoch')
     training_state, state = carry
     key_minimize, key_generate_unroll, new_key = jax.random.split(
         training_state.key, 3)
@@ -377,6 +385,7 @@ def train(
       batch_size * unroll_length * num_minibatches * action_repeat)
 
   def _minimize_loop(training_state, state):
+    print('_minimize_loop')
     (training_state, state), losses = jax.lax.scan(
         run_epoch, (training_state, state), (),
         length=num_epochs // log_frequency)
@@ -396,8 +405,80 @@ def train(
   losses = {}
   state = first_state
   metrics = {}
+  
+  print('REAL-COMPILE')
+  learn(
+    training_state,
+    sps,
+    eval_sps,
+    losses,
+    state,
+    metrics,
+    process_id,
+    run_eval,
+    eval_first_state,
+    eval_walltime,
+    training_walltime,
+    xt,
+    key_debug,
+    minimize_loop,
+    core_env,
+    process_count,
+    episode_length,
+    action_repeat,
+    1, # log_frequency
+    normalize_observations,
+    progress_fn,
+    )
+  print('DONE REAL-COMPILE')
 
+  return learn(
+    training_state,
+    sps,
+    eval_sps,
+    losses,
+    state,
+    metrics,
+    process_id,
+    run_eval,
+    eval_first_state,
+    eval_walltime,
+    training_walltime,
+    xt,
+    key_debug,
+    minimize_loop,
+    core_env,
+    process_count,
+    episode_length,
+    action_repeat,
+    log_frequency,
+    normalize_observations,
+    progress_fn,
+    )
 
+def learn(
+    training_state,
+    sps,
+    eval_sps,
+    losses,
+    state,
+    metrics,
+    process_id,
+    run_eval,
+    eval_first_state,
+    eval_walltime,
+    training_walltime,
+    xt,
+    key_debug,
+    minimize_loop,
+    core_env,
+    process_count,
+    episode_length: int,
+    action_repeat: int = 1,
+    log_frequency=10,
+    normalize_observations=False,
+    progress_fn: Optional[Callable[[int, Dict[str, Any]], None]] = None,
+):
   for it in range(log_frequency + 1):
     print('1-ITERATION')
     logging.info('starting iteration %s %s', it, time.time() - xt)
@@ -476,6 +557,7 @@ def train(
 def make_params_and_inference_fn(observation_size, action_size,
                                  normalize_observations):
   """Creates params and inference function for the PPO agent."""
+  print('make_params_and_inference_fn')
   obs_normalizer_params, obs_normalizer_apply_fn = normalization.make_data_and_apply_fn(
       observation_size, normalize_observations)
   parametric_action_distribution = distribution.NormalTanhDistribution(
@@ -485,6 +567,7 @@ def make_params_and_inference_fn(observation_size, action_size,
       observation_size)
 
   def inference_fn(params, obs, key):
+    print('inference_fn')
     normalizer_params, policy_params = params
     obs = obs_normalizer_apply_fn(normalizer_params, obs)
     action = parametric_action_distribution.sample(
