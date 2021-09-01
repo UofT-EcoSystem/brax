@@ -88,7 +88,7 @@ flags.DEFINE_float('grad_updates_per_step', 1.0,
                    'environment.')
 
 
-def main(unused_argv):
+def setup(unused_argv):
   # Parse args if given
   unused_argv.insert(0,'Flags expect first item in this list to be the name of program. Flags skips the first item. This is needed so that no args are skipped in the list.')
   flags.FLAGS(unused_argv)
@@ -102,7 +102,7 @@ def main(unused_argv):
 
   with metric_writers.ensure_flushes(writer):
     if FLAGS.learner == 'sac':
-      inference_fn, params, _ = sac.train(
+      learn_args = sac.train(
           environment_fn=env_fn,
           num_envs=FLAGS.num_envs,
           action_repeat=FLAGS.action_repeat,
@@ -120,8 +120,9 @@ def main(unused_argv):
           grad_updates_per_step=FLAGS.grad_updates_per_step,
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
+      return learn_args, sac.learn, env_fn, FLAGS
     if FLAGS.learner == 'es':
-      inference_fn, params, _ = es.train(
+      learn_args = es.train(
           environment_fn=env_fn,
           num_timesteps=FLAGS.total_env_steps,
           fitness_shaping=FLAGS.fitness_shaping,
@@ -137,8 +138,9 @@ def main(unused_argv):
           seed=FLAGS.seed,
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
+      return learn_args, es.learn, env_fn, FLAGS
     if FLAGS.learner == 'apg':
-      inference_fn, params, _ = apg.train(
+      learn_args = apg.train(
           environment_fn=env_fn,
           num_envs=FLAGS.num_envs,
           action_repeat=FLAGS.action_repeat,
@@ -150,9 +152,10 @@ def main(unused_argv):
           max_gradient_norm=FLAGS.max_gradient_norm,
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
+      return learn_args, apg.learn, env_fn, FLAGS
     if FLAGS.learner == 'ppo':
       print('PPO')
-      args = ppo.setup(
+      learn_args = ppo.setup(
           environment_fn=env_fn,
           num_envs=FLAGS.num_envs,
           max_devices_per_host=FLAGS.max_devices_per_host,
@@ -171,10 +174,11 @@ def main(unused_argv):
           reward_scaling=FLAGS.reward_scaling,
           episode_length=FLAGS.episode_length,
           progress_fn=writer.write_scalars)
-      return args
+      return learn_args, ppo.learn, env_fn, FLAGS
 
-  env = env_fn()
-  state = env.reset(jax.random.PRNGKey(FLAGS.seed))
+
+def run(learn_args, learn_func, env_fn, FLAGS):
+  inference_fn, params, _ = learn_func(*learn_args) # main training loop!
 
   # Save to flax serialized checkpoint.
   filename = f'{FLAGS.env}_{FLAGS.learner}.flax'
@@ -183,6 +187,8 @@ def main(unused_argv):
 
   # output an episode trajectory
   if FLAGS.save_html:
+    env = env_fn()
+    state = env.reset(jax.random.PRNGKey(FLAGS.seed))
     qps = []
     jit_inference_fn = jax.jit(inference_fn)
     jit_step_fn = jax.jit(env.step)
@@ -196,9 +202,6 @@ def main(unused_argv):
     html_path = f'{FLAGS.logdir}/trajectory_{uuid.uuid4()}.html'
     html.save_html(html_path, env.sys, qps)
 
-def run(args):
-    inference_fn, params, _ = ppo.learn(*args)
-
-
 if __name__ == '__main__':
-  app.run(main)
+  args = app.run(setup)
+  run(*args)
